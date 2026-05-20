@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Quiz IA - Session de révision</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border-left-color: #2563eb;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="bg-slate-100 min-h-screen">
+    <div class="container mx-auto max-w-2xl pt-10 px-4">
+        <div class="flex justify-between items-center mb-6">
+            <a href="/" class="text-blue-600 font-bold hover:underline">← Quitter</a>
+            <div class="text-right">
+                <span id="questionNumber" class="text-lg font-bold text-slate-700">Question 1/10</span>
+                <div class="w-48 bg-gray-200 rounded-full h-2 mt-2 overflow-hidden">
+                    <div id="progressBar" class="bg-blue-600 h-2 rounded-full transition-all duration-700" style="width: 10%"></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="main-container" class="bg-white rounded-3xl shadow-xl p-8 border border-gray-100 min-h-[400px] flex flex-col justify-center">
+            
+            <!-- LOADER -->
+            <div id="loader" class="text-center py-10">
+                <div class="flex justify-center mb-4">
+                    <div class="spinner"></div>
+                </div>
+                <p class="text-blue-600 font-bold animate-pulse">L'IA analyse ton cours...</p>
+            </div>
+
+            <!-- INTERFACE QUIZ -->
+            <div id="quiz-ui" class="hidden">
+                <h2 id="question-text" class="text-2xl font-bold text-gray-800 mb-8 leading-tight"></h2>
+                <div id="options-list" class="grid gap-4 mb-8"></div>
+                <div id="feedback" class="hidden p-4 rounded-2xl text-center font-bold mb-4"></div>
+                <button id="next-btn" onclick="nextStep()" class="w-full bg-blue-600 text-white py-4 rounded-2xl font-bold hidden hover:bg-blue-700 shadow-lg transition-all">
+                    Continuer →
+                </button>
+            </div>
+
+            <!-- ECRAN DE FIN -->
+            <div id="result-ui" class="hidden text-center py-10">
+                <div class="text-6xl mb-4">🎓</div>
+                <h2 class="text-3xl font-black text-gray-800 mb-2">Terminé !</h2>
+                <div class="text-7xl font-black text-blue-600 my-6" id="final-score">0/10</div>
+                <p id="comment" class="text-lg text-gray-600 mb-10 font-medium px-4"></p>
+                <button onclick="window.location.href='/'" class="bg-gray-800 text-white px-10 py-4 rounded-2xl font-bold shadow-lg hover:bg-black">
+                    Retour à l'accueil
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- INITIALISATION ---
+        let currentQ = 1;
+        let score = 0;
+        let correctAnswer = "";
+        const urlParams = new URLSearchParams(window.location.search);
+        const lang = urlParams.get('lang') || 'fr';
+
+        // --- FONCTION POUR RÉCUPÉRER UNE QUESTION ---
+        async function fetchQuestion() {
+            console.log("Tentative d'appel au serveur..."); // Message de test
+            
+            const loader = document.getElementById('loader');
+            const quizUi = document.getElementById('quiz-ui');
+            const feedback = document.getElementById('feedback');
+            const nextBtn = document.getElementById('next-btn');
+
+            // Reset l'affichage
+            quizUi.classList.add('hidden');
+            loader.classList.remove('hidden');
+            feedback.classList.add('hidden');
+            nextBtn.classList.add('hidden');
+
+            try {
+                // Appel API
+                const response = await fetch(`/generate_full_quiz?lang=${lang}`);
+                
+                if (!response.ok) {
+                    throw new Error("Le serveur a renvoyé une erreur " + response.status);
+                }
+
+                const data = await response.json();
+                console.log("Données reçues de l'IA :", data);
+
+                if (data.error) throw new Error(data.error);
+
+                // Remplissage de la question
+                document.getElementById('question-text').innerText = data.question;
+                correctAnswer = data.answer;
+                
+                const list = document.getElementById('options-list');
+                list.innerHTML = "";
+
+                data.options.forEach(opt => {
+                    const btn = document.createElement('button');
+                    btn.className = "text-left p-5 border-2 border-gray-100 rounded-2xl hover:border-blue-500 hover:bg-blue-50 transition-all font-medium text-gray-700 shadow-sm active:scale-95";
+                    btn.innerText = opt;
+                    btn.onclick = () => check(opt, btn);
+                    list.appendChild(btn);
+                });
+
+                // Cacher loader et afficher quiz
+                loader.classList.add('hidden');
+                quizUi.classList.remove('hidden');
+
+            } catch (err) {
+                console.error("ERREUR CAPTURÉE :", err);
+                loader.innerHTML = `
+                    <p class="text-red-500 font-bold mb-4 italic">Erreur : ${err.message}</p>
+                    <button onclick="fetchQuestion()" class="bg-blue-600 text-white px-6 py-2 rounded-lg font-bold shadow-md">🔄 Réessayer</button>
+                `;
+            }
+        }
+
+        // --- VÉRIFICATION ---
+        function check(selected, btn) {
+            const btns = document.querySelectorAll('#options-list button');
+            btns.forEach(b => b.disabled = true);
+            
+            const fb = document.getElementById('feedback');
+            fb.classList.remove('hidden');
+
+            const cleanSelected = selected.trim().toLowerCase();
+            const cleanCorrect = correctAnswer.trim().toLowerCase();
+
+            if (cleanSelected === cleanCorrect) {
+                score++;
+                fb.className = "p-4 rounded-2xl text-center font-bold mb-4 bg-green-100 text-green-700 border border-green-200";
+                fb.innerText = "✅ Excellent ! C'est la bonne réponse.";
+                btn.className = "text-left p-5 border-2 border-green-500 bg-green-50 rounded-2xl font-bold text-green-700 shadow-md";
+            } else {
+                fb.className = "p-4 rounded-2xl text-center font-bold mb-4 bg-red-100 text-red-700 border border-red-200";
+                fb.innerText = "❌ Dommage... La réponse était : " + correctAnswer;
+                btn.className = "text-left p-5 border-2 border-red-500 bg-red-50 rounded-2xl font-bold text-red-700 shadow-md";
+            }
+            document.getElementById('next-btn').classList.remove('hidden');
+        }
+
+        // --- NAVIGATION ---
+        function nextStep() {
+            if (currentQ < 10) {
+                currentQ++;
+                document.getElementById('questionNumber').innerText = `Question ${currentQ}/10`;
+                document.getElementById('progressBar').style.width = (currentQ * 10) + "%";
+                fetchQuestion();
+            } else {
+                showFinal();
+            }
+        }
+
+        function showFinal() {
+            document.getElementById('quiz-ui').classList.add('hidden');
+            document.getElementById('result-ui').classList.remove('hidden');
+            document.getElementById('final-score').innerText = `${score}/10`;
+            
+            let msg = score >= 5 ? "Bien joué ! Tu maîtrises ton sujet. 🚀" : "Encore un petit effort de révision ! 📚";
+            document.getElementById('comment').innerText = msg;
+        }
+
+        // DÉMARRAGE
+        window.onload = function() {
+            console.log("La page est chargée. Lancement du quiz...");
+            fetchQuestion();
+        };
+    </script>
+</body>
+</html>

@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Assistant de Révision IA</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .loading-dots:after { content: ' .'; animation: dots 1.5s steps(5, end) infinite; }
+        @keyframes dots { 0%, 20% { content: ' .'; } 40% { content: ' ..'; } 60% { content: ' ...'; } 80%, 100% { content: ''; } }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div class="container mx-auto p-8 max-w-5xl">
+        <!-- En-tête -->
+        <div class="text-center mb-12">
+            <h1 class="text-5xl font-black text-blue-700 mb-2 uppercase tracking-tighter">🎓 Assistant Révision</h1>
+            <p class="text-gray-500 font-medium">Intelligence Artificielle au service de ta réussite</p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <!-- 1. Section Analyse & Entraînement -->
+            <div class="bg-white p-6 rounded-3xl shadow-xl border border-gray-100">
+                <h2 class="text-xl font-bold mb-4 flex items-center gap-2 text-gray-800">
+                    <span class="bg-blue-100 p-2 rounded-xl">🧠</span> 1. Entraîner l'IA
+                </h2>
+                <p class="text-sm text-gray-500 mb-6">Importe ton cours au format PDF pour que l'IA puisse l'apprendre.</p>
+                
+                <input type="file" id="pdfFile" class="mb-4 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-bold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer"/>
+                
+                <button onclick="uploadPDF()" id="btnTrain" class="bg-blue-600 text-white px-6 py-4 rounded-2xl font-bold w-full shadow-lg shadow-blue-200 hover:bg-blue-700 transition-all active:scale-95">
+                    Lancer l'analyse sémantique
+                </button>
+
+                <!-- Zone de progression -->
+                <div id="trainingUI" class="mt-6 hidden bg-gray-50 p-4 rounded-2xl border border-gray-100">
+                    <div class="flex justify-between mb-2">
+                        <span id="statusLabel" class="text-sm font-bold text-blue-600 loading-dots">Analyse du texte</span>
+                        <span id="progressPercent" class="text-sm font-bold text-blue-600">0%</span>
+                    </div>
+                    <div class="w-full bg-gray-200 rounded-full h-2">
+                        <div id="progressBar" class="bg-blue-600 h-2 rounded-full transition-all duration-700" style="width: 0%"></div>
+                    </div>
+                    
+                    <!-- Mots-clés extraits -->
+                    <div id="conceptsContainer" class="mt-4 hidden">
+                        <p class="text-[10px] font-black text-gray-400 uppercase mb-2 tracking-widest">Concepts mémorisés :</p>
+                        <div id="conceptsList" class="flex flex-wrap gap-2"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 2. Section Quiz -->
+            <div class="bg-white p-6 rounded-3xl shadow-xl border border-gray-100 flex flex-col">
+                <h2 class="text-xl font-bold mb-4 flex items-center gap-2 text-gray-800">
+                    <span class="bg-purple-100 p-2 rounded-xl">🎯</span> 2. Auto-évaluation
+                </h2>
+                <p class="text-sm text-gray-500 mb-6">Une fois le cours appris, l'IA génère un quiz de 10 questions pour tester tes connaissances.</p>
+                
+                <button id="btnQuiz" onclick="startQuiz()" disabled class="mt-auto block text-center bg-purple-600 text-white px-6 py-5 rounded-2xl font-black text-lg w-full shadow-lg shadow-purple-200 opacity-40 cursor-not-allowed transition-all">
+                    LANCER LE QUIZ QCM
+                </button>
+                <p id="quizHint" class="text-[10px] text-red-400 mt-3 text-center italic font-bold">⚠️ Analyse requise avant de débloquer le quiz</p>
+            </div>
+        </div>
+
+        <!-- 3. Section Chat / QA -->
+      
+        <div class="mt-8 bg-white p-8 rounded-3xl shadow-xl border border-gray-100">
+            <h2 class="text-xl font-bold mb-6 flex items-center gap-2 text-gray-800">
+                <span class="bg-green-100 p-2 rounded-xl">📊</span> 3. Analyse approfondie du cours
+            </h2>
+            <div class="flex flex-wrap gap-4 mb-6">
+                <button onclick="analyserCours('resume')" id="btnResume" class="flex-1 bg-green-600 text-white px-6 py-4 rounded-2xl font-bold hover:bg-green-700 shadow-lg transition-all active:scale-95">
+                    📝 Générer un Résumé
+                </button>
+                <button onclick="analyserCours('imports')" id="btnImports" class="flex-1 bg-blue-900 text-white px-6 py-4 rounded-2xl font-bold hover:bg-black shadow-lg transition-all active:scale-95">
+                    📦 Lister les Imports/Packages
+                </button>
+            </div>
+            <div id="answerDisplay" class="mt-6 p-6 rounded-2xl bg-gray-50 text-gray-700 font-medium min-h-[100px] border-l-8 border-green-500 whitespace-pre-wrap">
+                Le résultat de l'analyse s'affichera ici...
+            </div>
+        </div>
+
+        <!-- Modifier la partie <script> de index.html -->
+        <script>
+            async function analyserCours(type) {
+                const display = document.getElementById('answerDisplay');
+                const btnR = document.getElementById('btnResume');
+                const btnI = document.getElementById('btnImports');
+                
+                // Verrouillage de l'UI
+                btnR.disabled = btnI.disabled = true;
+                btnR.classList.add('opacity-50'); btnI.classList.add('opacity-50');
+                display.innerText = "L'IA analyse le contenu technique du document...";
+
+                const formData = new FormData();
+                formData.append('action', type); // On envoie 'resume' ou 'imports'
+
+                try {
+                    const response = await fetch('/ask', { method: 'POST', body: formData });
+                    const data = await response.json();
+                    
+                    // On affiche le résultat (whitespace-pre-wrap dans le CSS permet de garder les retours à la ligne)
+                    display.innerText = data.answer;
+                } catch (e) {
+                    display.innerText = "Erreur de connexion au serveur.";
+                } finally {
+                    btnR.disabled = btnI.disabled = false;
+                    btnR.classList.remove('opacity-50'); btnI.classList.remove('opacity-50');
+                }
+            }
+            
+            // Garde tes fonctions uploadPDF() et startQuiz() identiques
+        </script>
+    <script>
+        // FONCTION D'UPLOAD ET D'ANALYSE (ENTRAÎNEMENT)
+        async function uploadPDF() {
+            const fileInput = document.getElementById('pdfFile');
+            if (!fileInput.files[0]) { alert("Sélectionne un fichier PDF !"); return; }
+
+            const ui = document.getElementById('trainingUI');
+            const bar = document.getElementById('progressBar');
+            const percent = document.getElementById('progressPercent');
+            const label = document.getElementById('statusLabel');
+            
+            ui.classList.remove('hidden');
+            label.innerText = "Lecture du document";
+            bar.style.width = "20%"; percent.innerText = "20%";
+
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+
+            try {
+                const response = await fetch('/upload', { method: 'POST', body: formData });
+                const data = await response.json();
+
+                if (response.ok) {
+                    label.innerText = "Analyse sémantique";
+                    bar.style.width = "70%"; percent.innerText = "70%";
+
+                    setTimeout(() => {
+                        label.innerText = "Cours Mémorisé !";
+                        label.classList.remove('loading-dots');
+                        label.classList.replace('text-blue-600', 'text-green-600');
+                        bar.style.width = "100%"; percent.innerText = "100%";
+                        bar.classList.replace('bg-blue-600', 'bg-green-500');
+
+                        // Débloquer le bouton Quiz
+                        const btnQuiz = document.getElementById('btnQuiz');
+                        btnQuiz.disabled = false;
+                        btnQuiz.classList.remove('opacity-40', 'cursor-not-allowed');
+                        document.getElementById('quizHint').classList.add('hidden');
+
+                        // Afficher les mots-clés extraits
+                        const conceptsDiv = document.getElementById('conceptsContainer');
+                        const list = document.getElementById('conceptsList');
+                        conceptsDiv.classList.remove('hidden');
+                        list.innerHTML = "";
+                        data.concepts.forEach(c => {
+                            list.innerHTML += `<span class="bg-white text-blue-600 px-3 py-1 rounded-lg text-[10px] font-bold border border-blue-200">#${c.toUpperCase()}</span>`;
+                        });
+                    }, 1200);
+                } else {
+                    alert("Erreur : " + data.message);
+                }
+            } catch (error) {
+                alert("Le serveur ne répond pas. Lancez main.py !");
+            }
+        }
+
+        // REDIRECTION VERS LE QUIZ
+        function startQuiz() {
+            // Puisque tout est en français, on redirige directement
+            window.location.href = `/quiz.html?lang=fr`;
+        }
+
+        // POSER UNE QUESTION
+        async function askQuestion() {
+            const btn = document.querySelector('button[onclick="askQuestion()"]');
+            const questionInput = document.getElementById('userQuestion');
+            const display = document.getElementById('answerDisplay');
+            
+            if (!questionInput.value) return;
+
+            // 1. Désactiver le bouton et changer le style
+            btn.disabled = true;
+            btn.classList.add('opacity-50', 'cursor-wait');
+            display.innerText = "L'IA réfléchit (cela peut prendre quelques secondes)...";
+
+            const formData = new FormData();
+            formData.append('question', questionInput.value);
+
+            try {
+                const response = await fetch('/ask', { method: 'POST', body: formData });
+                const data = await response.json();
+                display.innerText = data.answer;
+            } catch (e) {
+                display.innerText = "Erreur de connexion au serveur.";
+            } finally {
+                // 2. Réactiver le bouton après la réponse
+                btn.disabled = false;
+                btn.classList.remove('opacity-50', 'cursor-wait');
+            }
+        }
+    </script>
+</body>
+</html>
